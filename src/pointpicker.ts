@@ -1,5 +1,4 @@
-
-var currentCorners;
+var currentPoints;
 var appState;
 
 class Point2D {
@@ -37,15 +36,15 @@ class AppState {
         this.currentIndex += 1;
         return this.currentImageURL();
     }
-    persistInOverlay(corners : Corners) {
+    persistInOverlay(points : Points) {
       let putURL = this.server
                     + this.items[this.currentIndex]["_links"]["self"]["href"]
-                    + '/quadrilateral_points';
-      console.log('persistInOverlay', corners.asJSONString(), putURL);
+                    + '/multi_points';
+      console.log('persistInOverlay', points.asJSONString(), putURL);
       $.ajax({
           type: 'PUT',
           url: putURL,
-          data: corners.asJSONString(),
+          data: points.asJSONString(),
           success: function(data) {
               console.log("Success!");
               let imageURL = appState.nextImageURL();
@@ -58,13 +57,8 @@ class AppState {
   }
 }
 
-class Corners {
-    corners: Point2D[] = [
-        new Point2D(0, 0),
-        new Point2D(1, 0),
-        new Point2D(0, 1),
-        new Point2D(1, 1)
-    ]
+class Points {
+    points: Point2D[] = [];
     constructor() {
         this.drawOnCanvas();
     }
@@ -72,33 +66,21 @@ class Corners {
         let c = <HTMLCanvasElement>document.getElementById("pointsCanvas");
         let ctx = c.getContext('2d');
         ctx.clearRect(0, 0, c.width, c.height);
-        for (let c of this.corners) {
-            drawCircle(c);
+        for (let p of this.points) {
+            drawCircle(p);
         }
     }
     update(p: Point2D) {
-        console.log("Called Corners update", p);
-        let minDist = 2;
-        let minIndex = 0;
-        for (let i in this.corners) {
-            let dist = p.dist(this.corners[i]);
-            if (dist < minDist) {
-                minDist = dist;
-                minIndex = Number(i);
-            }
-        }
-        console.log(minIndex, minDist);
-        this.corners[minIndex] = p;
+        this.points.push(p);
         this.drawOnCanvas();
     }
     asJSONString() {
-        // return JSON.stringify("hello");
-        return JSON.stringify({ "topLeft": this.corners[0],
-                                "topRight": this.corners[1],
-                                "bottomLeft": this.corners[2],
-                                "bottomRight": this.corners[3]})
+        return JSON.stringify(
+            this.points.map(function (p) {
+                return [p.x, p.y];
+            })
+        );
     }
-
 }
 
 
@@ -123,7 +105,7 @@ let drawImageFromURL = function(imageURL: URL) {
 }
 
 let loadStartImage=function() {
-    currentCorners = new Corners();
+    currentPoints = new Points();
     console.log("Getting image");
     $.get("http://localhost:5000/items", function(data) {
         appState = new AppState(data["_embedded"]["items"]);
@@ -135,7 +117,8 @@ let loadStartImage=function() {
 
     document.addEventListener('keydown', function(event) {
         if (event.keyCode == 39) {
-            appState.persistInOverlay(currentCorners);
+            appState.persistInOverlay(currentPoints);
+            currentPoints = new Points();
         }
     });
 };
@@ -164,7 +147,7 @@ let setupCanvas = function() {
     let item = document.querySelector("#imgCanvas");
     $("#pointsCanvas").click(function(event) {
         let normCoords = getElementNormCoords(item, event);
-        currentCorners.update(normCoords);
+        currentPoints.update(normCoords);
         console.log(normCoords.x + ',' + normCoords.y);
     });
 };
